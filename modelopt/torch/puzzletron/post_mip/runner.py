@@ -561,6 +561,9 @@ _LMMS_EVAL_RESERVED_TOPOLOGY_MODEL_ARG_FIELDS = frozenset(
 )
 _LMMS_EVAL_RESERVED_EXTRA_ARG_FLAGS = frozenset(
     {
+        "--batch-size",
+        "--batch_size",
+        "--model",
         "--model_args",
         "--model-args",
         "--output_path",
@@ -687,6 +690,8 @@ def _model_arg_string(values: Mapping[str, Any]) -> str:
 def _merge_lmms_eval_model_args(settings: Mapping[str, Any], checkpoint: str) -> str:
     raw = settings.get("model_args")
     checkpoint_arg = str(settings.get("checkpoint_arg", "model"))
+    if checkpoint_arg != "model":
+        raise ValueError("downstream_evaluation.config.checkpoint_arg must be 'model'")
     topology = dict(settings.get("topology") or {})
     canonical_topology = normalize_vllm_topology(topology) if topology else {}
     reserved_fields = _lmms_eval_reserved_model_arg_fields(checkpoint_arg)
@@ -705,7 +710,7 @@ def _merge_lmms_eval_model_args(settings: Mapping[str, Any], checkpoint: str) ->
                 ],
             }
         )
-    for key in _LMMS_EVAL_MODEL_ARG_FIELDS:
+    for key in sorted(_LMMS_EVAL_MODEL_ARG_FIELDS):
         if key in settings:
             derived[key] = settings[key]
 
@@ -772,11 +777,14 @@ def _lmms_eval_command(
 ) -> tuple[list[str], dict[str, str], float | None]:
     """Build a deterministic lmms-eval CLI invocation for one realized checkpoint."""
 
+    model = str(settings.get("model", "vllm"))
+    if model != "vllm":
+        raise ValueError("downstream_evaluation.config.model must be 'vllm'")
     tasks = ",".join(_configured_lmms_eval_tasks(settings))
     argv = [
         *_command_prefix(settings),
         "--model",
-        str(settings.get("model", "vllm")),
+        model,
         "--model_args",
         _merge_lmms_eval_model_args(settings, checkpoint),
         "--tasks",
